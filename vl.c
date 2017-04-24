@@ -3802,7 +3802,19 @@ int main(int argc, char **argv, char **envp)
                    char *ptr;
                    vgt_cap = strtol(optarg, &ptr, 10);
                 }
-		break;
+		        break;
+            case QEMU_OPTION_vgt_priority:
+                {
+                    char *ptr;
+                    vgt_priority = strtol(optarg, &ptr, 10);
+                }
+                break;
+            case QEMU_OPTION_tbs_period_ms:
+                {
+                    char *ptr;
+                    tbs_period_ms = strtol(optarg, &ptr, 10);
+                }
+                break;
             case QEMU_OPTION_vgt_monitor_config_file:
                 {
                     vgt_monitor_config_file = optarg;

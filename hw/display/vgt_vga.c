@@ -90,6 +90,8 @@ int vgt_fence_sz = 4;
 int vgt_primary = 1; /* -1 means "not specified */
 int vgt_cap = 0;
 const char *vgt_monitor_config_file = NULL;
+int vgt_priority = 2; /* Default priority */
+int tbs_period_ms = 1; /* in ms */
 
 int guest_domid = 0;
 int get_guest_domid(void)
@@ -474,12 +476,15 @@ static void create_vgt_instance(VGTVGAState *vdev)
     int domid = vdev->domid;
 
     qemu_log("vGT: %s: domid=%d, low_gm_sz=%dMB, high_gm_sz=%dMB, "
-        "fence_sz=%d, vgt_primary=%d, vgt_cap=%d\n", __func__, domid,
+        "fence_sz=%d, vgt_primary=%d, vgt_cap=%d, "
+        "vgt_priority=%d, tbs_period_ms=%dms\n", __func__, domid,
         vgt_low_gm_sz, vgt_high_gm_sz, vgt_fence_sz, vgt_primary,
-		vgt_cap);
+		vgt_cap, vgt_priority, tbs_period_ms);
     if (vgt_low_gm_sz <= 0 || vgt_high_gm_sz <=0 ||
                vgt_cap < 0 || vgt_cap > 100 ||
 		vgt_primary < -1 || vgt_primary > 1 ||
+        vgt_priority < 1 || vgt_priority > 3 ||
+        tbs_period_ms < 1 || tbs_period_ms > 15 ||
         vgt_fence_sz <=0) {
         qemu_log("vGT: %s failed: invalid parameters!\n", __func__);
         abort();
@@ -499,9 +504,9 @@ static void create_vgt_instance(VGTVGAState *vdev)
      * driver to create a vgt instanc for Domain domid with the required
      * parameters. NOTE: aperture_size and gm_size are in MB.
      */
-    if (!err && fprintf(vgt_file, "%d,%u,%u,%u,%d,%u\n", domid,
+    if (!err && fprintf(vgt_file, "%d,%u,%u,%u,%d,%u,%u,%u\n", domid,
         vgt_low_gm_sz, vgt_high_gm_sz, vgt_fence_sz, vgt_primary,
-		vgt_cap) < 0) {
+		vgt_cap, vgt_priority, tbs_period_ms) < 0) {
         err = errno;
     }
 
@@ -972,12 +977,12 @@ int dirty_bitmap_read(uint8_t* bitmap, unsigned long off, unsigned long count)
         total += n_written;
         if (n_written < remains || total >= count )
             break;
-        
+
     }
 
     DPRINTF("WRITE 0x%lx size of dirty_bitmap from offset=0x%lx."
            " Actual write 0x%lx \n", count, off, total);
-    if (total <= 0) 
+    if (total <= 0)
         goto EXIT;
 
     /*STEP2: Read back all dirty status*/
@@ -1013,9 +1018,9 @@ EXIT:
     return total;
 }
 
-static void vgt_sync_dirty_bitmap(VGTVGAState *d, uint8_t *ram_bitmap, 
+static void vgt_sync_dirty_bitmap(VGTVGAState *d, uint8_t *ram_bitmap,
         unsigned long ram_bitmap_size, /* bitmap size in bytes */
-        unsigned long start_addr, 
+        unsigned long start_addr,
         unsigned long nr_pages)
 {
     unsigned long bit_start = start_addr >> TARGET_PAGE_BITS;
@@ -1024,7 +1029,7 @@ static void vgt_sync_dirty_bitmap(VGTVGAState *d, uint8_t *ram_bitmap,
 
     FUNC_ENTER;
 
-    n = dirty_bitmap_read(ram_bitmap, bit_start / BITS_PER_BYTE, 
+    n = dirty_bitmap_read(ram_bitmap, bit_start / BITS_PER_BYTE,
             BITS_TO_BYTES(nr_pages + (bit_start % BITS_PER_BYTE)));
     memset(ram_bitmap + n, 0, ram_bitmap_size - n);
 
@@ -1056,13 +1061,13 @@ static void vgt_sync_dirty_bitmap(VGTVGAState *d, uint8_t *ram_bitmap,
 static void vgt_log_sync(MemoryListener *listener,
         MemoryRegionSection *section)
 {
-    VGTVGAState *d = container_of(listener, 
+    VGTVGAState *d = container_of(listener,
             struct VGTVGAState, vgt_memory_listener);
 
     if (d->vgt_paused) {
         hwaddr start_addr = section->offset_within_address_space;
         ram_addr_t size = int128_get64(section->size);
-        unsigned long nr_pages = size >> TARGET_PAGE_BITS;	
+        unsigned long nr_pages = size >> TARGET_PAGE_BITS;
         /* allocate additional 8 bytes in case (start_addr>>12)
          * is not bytes aligned.*/
         unsigned long bitmap_size =

@@ -265,6 +265,8 @@ extern int vgt_high_gm_sz;
 extern int vgt_fence_sz;
 extern int vgt_cap;
 extern const char *vgt_monitor_config_file;
+extern int vgt_priority;
+extern int tbs_period_ms;
 
 DeviceState *vgt_vga_init(PCIBus *pci_bus);
 void vgt_bridge_pci_conf_init(PCIDevice *dev);
